@@ -69,7 +69,8 @@
         </dependency>
         <dependency>
             <groupId>com.plotsquared</groupId>
-            <artifactId>plotquared-bukkit</artifactId>
+            <!-- KORREKTUR: plotsquared statt plotquared -->
+            <artifactId>plotsquared-bukkit</artifactId>
             <version>7.3.9</version>
             <scope>provided</scope>
         </dependency>

@@ -1,0 +1,14 @@
+name: BierLager
+version: 3.2.1
+main: de.bierrang.plugin.BierLager
+api-version: '1.21'
+depend: [PlotSquared]
+commands:
+  bierlager:
+    description: Hauptbefehl für das Lagersystem
+    usage: /bierlager
+    aliases: [lager]
+permissions:
+  bierlager.admin:
+    description: Zugriff auf Admin Befehle
+    default: op

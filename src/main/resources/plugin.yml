@@ -9,6 +9,9 @@ commands:
     usage: /bierlager
     aliases: [lager]
 permissions:
+  bierlager.use:
+    description: Erlaubt das Holen des Werkzeugs
+    default: true  
   bierlager.admin:
-    description: Zugriff auf Admin Befehle
+    description: Admin Rechte (falls nötig für Reload etc.)
     default: op

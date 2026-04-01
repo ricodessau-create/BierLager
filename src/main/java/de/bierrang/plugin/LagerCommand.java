@@ -22,7 +22,8 @@ public class LagerCommand implements CommandExecutor {
             return true;
         }
 
-        if (!p.hasPermission("bierlager.admin")) {
+        // Check auf das neue Recht "bierlager.use"
+        if (!p.hasPermission("bierlager.use")) {
             p.sendMessage(ChatColor.RED + "Keine Rechte.");
             return true;
         }

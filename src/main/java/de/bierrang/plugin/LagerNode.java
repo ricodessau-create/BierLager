@@ -1,9 +1,9 @@
 package de.bierrang.plugin;
 
 import org.bukkit.Location;
-import org.bukkit.inventory.ItemStack;
-import java.util.ArrayList;
-import java.util.List;
+import org.bukkit.Material;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 public class LagerNode {
@@ -12,7 +12,7 @@ public class LagerNode {
     private Type type;
     private Location location;
     private UUID ownerId;
-    private List<ItemStack> filterItems;
+    private Set<Material> filterMaterials; // GEÄNDERT: Set<Material>
     private boolean isWhitelist;
     
     private transient long lastFailTime = 0;
@@ -21,7 +21,7 @@ public class LagerNode {
         this.type = type;
         this.location = location;
         this.ownerId = ownerId;
-        this.filterItems = new ArrayList<>();
+        this.filterMaterials = new HashSet<>();
         this.isWhitelist = true;
     }
 
@@ -29,7 +29,7 @@ public class LagerNode {
     public void setType(Type type) { this.type = type; }
     public Location getLocation() { return location; }
     public UUID getOwnerId() { return ownerId; }
-    public List<ItemStack> getFilterItems() { return filterItems; }
+    public Set<Material> getFilterMaterials() { return filterMaterials; }
     public boolean isWhitelist() { return isWhitelist; }
     public void setWhitelist(boolean whitelist) { isWhitelist = whitelist; }
     

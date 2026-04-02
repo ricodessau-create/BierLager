@@ -55,10 +55,10 @@
             <id>papermc</id>
             <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
-        <!-- PlotSquared Repository (IntellectualSites/Hangar) -->
+        <!-- Hangar Repository (Notwendig für PlotSquared 7.x) -->
         <repository>
-            <id>intellectualsites</id>
-            <url>https://mvn.intellectualsites.com/content/groups/public/</url>
+            <id>hangar</id>
+            <url>https://repo.papermc.io/repository/hangar/</url>
         </repository>
     </repositories>
 
@@ -69,10 +69,10 @@
             <version>1.21.1-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
+        <!-- PlotSquared Abhängigkeit -->
         <dependency>
             <groupId>com.plotsquared</groupId>
             <artifactId>plotsquared-bukkit</artifactId>
-            <!-- Die gewünschte Version -->
             <version>7.3.9</version>
             <scope>provided</scope>
         </dependency>

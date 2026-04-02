@@ -256,4 +256,4 @@ public class LagerManager {
         if (w == null) return null;
         return new Location(w, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
     }
-                                      }
+                              }

@@ -50,15 +50,14 @@
     </build>
 
     <repositories>
-        <!-- PaperMC Repository -->
         <repository>
             <id>papermc</id>
             <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
-        <!-- Hangar Repository (Notwendig für PlotSquared 7.x) -->
+        <!-- JitPack Repository für PlotSquared -->
         <repository>
-            <id>hangar</id>
-            <url>https://repo.papermc.io/repository/hangar/</url>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
         </repository>
     </repositories>
 
@@ -69,10 +68,10 @@
             <version>1.21.1-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
-        <!-- PlotSquared Abhängigkeit -->
+        <!-- PlotSquared via JitPack (GitHub Release) -->
         <dependency>
-            <groupId>com.plotsquared</groupId>
-            <artifactId>plotsquared-bukkit</artifactId>
+            <groupId>com.github.IntellectualSites</groupId>
+            <artifactId>PlotSquared-Bukkit</artifactId>
             <version>7.3.9</version>
             <scope>provided</scope>
         </dependency>

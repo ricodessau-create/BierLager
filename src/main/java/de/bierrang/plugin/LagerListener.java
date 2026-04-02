@@ -4,6 +4,7 @@ import com.plotsquared.core.player.PlotPlayer;
 import com.plotsquared.core.plot.Plot;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
@@ -195,7 +196,8 @@ public class LagerListener implements Listener {
     @EventHandler
     public void onClose(org.bukkit.event.inventory.InventoryCloseEvent e) {
         if (e.getView().getTitle().startsWith("§bFilter:")) {
-            Location loc = plugin.getLagerManager().getTempLocation((Player) e.getPlayer());
+            // FEHLERBEHEBUNG: getUniqueId() statt Player-Objekt verwendet
+            Location loc = plugin.getLagerManager().getTempLocation(e.getPlayer().getUniqueId());
             LagerNode node = plugin.getLagerManager().getNodes().get(loc);
             if (node == null) return;
 

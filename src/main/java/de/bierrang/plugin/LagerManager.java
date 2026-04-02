@@ -69,6 +69,9 @@ public class LagerManager {
             if (System.currentTimeMillis() - sourceNode.getLastFailTime() < 2000) continue;
             if (!isChunkLoaded(sourceNode.getLocation())) continue;
 
+            // NEU: Filter Pflicht! Wenn leer, überspringen.
+            if (sourceNode.getFilterMaterials().isEmpty()) continue;
+
             Block sourceBlock = sourceNode.getLocation().getBlock();
             if (!(sourceBlock.getState() instanceof Container sourceContainer)) continue;
 
@@ -80,11 +83,13 @@ public class LagerManager {
                 ItemStack item = sourceInv.getItem(i);
                 if (item == null || item.getType() == Material.AIR) continue;
 
+                // Filter Check
+                if (!matchesFilter(item, sourceNode)) continue;
+
                 boolean movedThisSlot = false;
                 
                 for (LagerNode targetNode : outputs) {
                     if (!Objects.equals(sourceNode.getOwnerId(), targetNode.getOwnerId())) continue;
-                    if (!matchesFilter(item, targetNode)) continue;
 
                     if (moveItem(sourceInv, i, targetNode)) {
                         movedThisSlot = true;
@@ -116,7 +121,6 @@ public class LagerManager {
             sourceInv.setItem(slot, null);
             return true;
         } else {
-            // DEFENSIVE FIX: Null-Safe Zugriff auf leftover
             ItemStack remaining = leftover.values().iterator().next();
             if (remaining != null) {
                 sourceInv.setItem(slot, remaining);
@@ -132,10 +136,10 @@ public class LagerManager {
         return world.isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4);
     }
 
+    // NEU: Filter Logik mit Material
     private boolean matchesFilter(ItemStack item, LagerNode node) {
-        if (node.getFilterItems().isEmpty()) return true;
-        boolean isContained = node.getFilterItems().stream()
-                .anyMatch(fi -> fi != null && fi.getType() == item.getType());
+        if (node.getFilterMaterials().isEmpty()) return false; // No filter = no transfer
+        boolean isContained = node.getFilterMaterials().contains(item.getType());
         return node.isWhitelist() == isContained;
     }
     
@@ -186,10 +190,7 @@ public class LagerManager {
     }
 
     private void markSave() { needsSave = true; }
-    
-    public void save() {
-        performSave();
-    }
+    public void save() { performSave(); }
 
     private void performSave() {
         dataConfig.set("nodes", null);
@@ -200,7 +201,11 @@ public class LagerManager {
             dataConfig.set("nodes." + key + ".type", node.getType().name());
             dataConfig.set("nodes." + key + ".owner", node.getOwnerId() != null ? node.getOwnerId().toString() : null);
             dataConfig.set("nodes." + key + ".whitelist", node.isWhitelist());
-            dataConfig.set("nodes." + key + ".filter", node.getFilterItems());
+            
+            // Speichere Materialien als Liste von Strings
+            List<String> mats = new ArrayList<>();
+            for (Material m : node.getFilterMaterials()) mats.add(m.name());
+            dataConfig.set("nodes." + key + ".filter", mats);
         }
         try { dataConfig.save(dataFile); } catch (IOException e) { e.printStackTrace(); }
     }
@@ -227,11 +232,9 @@ public class LagerManager {
                 LagerNode node = new LagerNode(type, loc, owner);
                 node.setWhitelist(section.getBoolean(key + ".whitelist", true));
                 
-                List<?> list = section.getList(key + ".filter");
-                if (list != null) {
-                    for (Object o : list) {
-                        if (o instanceof ItemStack stack) node.getFilterItems().add(stack);
-                    }
+                List<String> mats = section.getStringList(key + ".filter");
+                for (String s : mats) {
+                    try { node.getFilterMaterials().add(Material.valueOf(s)); } catch (Exception ignored) {}
                 }
                 registerNode(node);
             } catch (Exception e) {
@@ -253,4 +256,4 @@ public class LagerManager {
         if (w == null) return null;
         return new Location(w, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
     }
-}
+                                      }

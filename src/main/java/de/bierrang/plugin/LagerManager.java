@@ -25,8 +25,8 @@ public class LagerManager {
     private final FileConfiguration dataConfig;
     
     private final Map<Location, LagerNode> nodes = new HashMap<>();
-    private final List<LagerNode> inputs = new ArrayList<>();
-    private final List<LagerNode> outputs = new ArrayList<>();
+    private final List<LagerNode> inputs = new ArrayList<>();  // Quellen (Ausgang)
+    private final List<LagerNode> outputs = new ArrayList<>(); // Ziele (Eingang)
     
     private final Map<UUID, Location> lastInteracted = new HashMap<>();
     private boolean needsSave = false;
@@ -65,12 +65,10 @@ public class LagerManager {
     }
 
     private void transferAllItems() {
+        // Iteriere durch alle QUELLEN (Inputs/Ausgang)
         for (LagerNode sourceNode : inputs) {
             if (System.currentTimeMillis() - sourceNode.getLastFailTime() < 2000) continue;
             if (!isChunkLoaded(sourceNode.getLocation())) continue;
-
-            // NEU: Filter Pflicht! Wenn leer, überspringen.
-            if (sourceNode.getFilterMaterials().isEmpty()) continue;
 
             Block sourceBlock = sourceNode.getLocation().getBlock();
             if (!(sourceBlock.getState() instanceof Container sourceContainer)) continue;
@@ -83,18 +81,25 @@ public class LagerManager {
                 ItemStack item = sourceInv.getItem(i);
                 if (item == null || item.getType() == Material.AIR) continue;
 
-                // Filter Check
-                if (!matchesFilter(item, sourceNode)) continue;
-
                 boolean movedThisSlot = false;
                 
+                // Iteriere durch alle ZIELE (Outputs/Eingang)
                 for (LagerNode targetNode : outputs) {
+                    // 1. Owner Check
                     if (!Objects.equals(sourceNode.getOwnerId(), targetNode.getOwnerId())) continue;
+                    
+                    // 2. Chunk Check Ziel
+                    if (!isChunkLoaded(targetNode.getLocation())) continue;
+
+                    // 3. FILTER CHECK (HIER IST DIE LÖSUNG!)
+                    // Wir prüfen den Filter am ZIEL (targetNode), nicht an der Quelle.
+                    if (targetNode.getFilterMaterials().isEmpty()) continue; // Ziel ohne Filter ist deaktiviert
+                    if (!matchesFilter(item, targetNode)) continue;
 
                     if (moveItem(sourceInv, i, targetNode)) {
                         movedThisSlot = true;
                         anyItemMoved = true;
-                        break;
+                        break; // Item wurde bewegt, nächster Slot
                     }
                 }
             }
@@ -136,9 +141,8 @@ public class LagerManager {
         return world.isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4);
     }
 
-    // NEU: Filter Logik mit Material
     private boolean matchesFilter(ItemStack item, LagerNode node) {
-        if (node.getFilterMaterials().isEmpty()) return false; // No filter = no transfer
+        if (node.getFilterMaterials().isEmpty()) return false; // Sicherheit
         boolean isContained = node.getFilterMaterials().contains(item.getType());
         return node.isWhitelist() == isContained;
     }
@@ -164,6 +168,9 @@ public class LagerManager {
 
     private void registerNode(LagerNode node) {
         nodes.put(node.getLocation(), node);
+        // Verwirrende Benennung in der Variable, aber logisch korrekt:
+        // Type.AUSGANG = Items gehen WEG -> ist die QUELLE (inputs Liste)
+        // Type.EINGANG = Items kommen AN -> ist das ZIEL (outputs Liste)
         if (node.getType() == LagerNode.Type.AUSGANG) inputs.add(node);
         else outputs.add(node);
     }
@@ -202,7 +209,6 @@ public class LagerManager {
             dataConfig.set("nodes." + key + ".owner", node.getOwnerId() != null ? node.getOwnerId().toString() : null);
             dataConfig.set("nodes." + key + ".whitelist", node.isWhitelist());
             
-            // Speichere Materialien als Liste von Strings
             List<String> mats = new ArrayList<>();
             for (Material m : node.getFilterMaterials()) mats.add(m.name());
             dataConfig.set("nodes." + key + ".filter", mats);
@@ -256,4 +262,4 @@ public class LagerManager {
         if (w == null) return null;
         return new Location(w, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
     }
-                              }
+}

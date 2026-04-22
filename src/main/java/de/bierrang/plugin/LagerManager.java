@@ -23,11 +23,11 @@ public class LagerManager {
     private final BierLager plugin;
     private final File dataFile;
     private final FileConfiguration dataConfig;
-    
+
     private final Map<Location, LagerNode> nodes = new HashMap<>();
-    private final List<LagerNode> inputs = new ArrayList<>();  // Quellen (Ausgang)
-    private final List<LagerNode> outputs = new ArrayList<>(); // Ziele (Eingang)
-    
+    private final List<LagerNode> inputs = new ArrayList<>();
+    private final List<LagerNode> outputs = new ArrayList<>();
+
     private final Map<UUID, Location> lastInteracted = new HashMap<>();
     private boolean needsSave = false;
 
@@ -38,7 +38,7 @@ public class LagerManager {
             try { dataFile.createNewFile(); } catch (IOException e) { e.printStackTrace(); }
         }
         this.dataConfig = YamlConfiguration.loadConfiguration(dataFile);
-        
+
         startTransferTask();
         startAutoSaveTask();
     }
@@ -51,7 +51,7 @@ public class LagerManager {
             }
         }.runTaskTimer(plugin, 20L, 10L);
     }
-    
+
     private void startAutoSaveTask() {
         new BukkitRunnable() {
             @Override
@@ -65,7 +65,6 @@ public class LagerManager {
     }
 
     private void transferAllItems() {
-        // Iteriere durch alle QUELLEN (Inputs/Ausgang)
         for (LagerNode sourceNode : inputs) {
             if (System.currentTimeMillis() - sourceNode.getLastFailTime() < 2000) continue;
             if (!isChunkLoaded(sourceNode.getLocation())) continue;
@@ -74,35 +73,29 @@ public class LagerManager {
             if (!(sourceBlock.getState() instanceof Container sourceContainer)) continue;
 
             Inventory sourceInv = sourceContainer.getInventory();
-            
+
             boolean anyItemMoved = false;
-            
+
             for (int i = 0; i < sourceInv.getSize(); i++) {
                 ItemStack item = sourceInv.getItem(i);
                 if (item == null || item.getType() == Material.AIR) continue;
 
                 boolean movedThisSlot = false;
-                
-                // Iteriere durch alle ZIELE (Outputs/Eingang)
+
                 for (LagerNode targetNode : outputs) {
-                    // 1. Owner Check
                     if (!Objects.equals(sourceNode.getOwnerId(), targetNode.getOwnerId())) continue;
-                    
-                    // 2. Chunk Check Ziel
                     if (!isChunkLoaded(targetNode.getLocation())) continue;
 
-                    // 3. FILTER CHECK
-                    if (targetNode.getFilterMaterials().isEmpty()) continue; // Ziel ohne Filter ist deaktiviert
                     if (!matchesFilter(item, targetNode)) continue;
 
                     if (moveItem(sourceInv, i, targetNode)) {
                         movedThisSlot = true;
                         anyItemMoved = true;
-                        break; // Item wurde bewegt, nächster Slot
+                        break;
                     }
                 }
             }
-            
+
             if (!anyItemMoved) {
                 sourceNode.setLastFailTime(System.currentTimeMillis());
             }
@@ -111,16 +104,16 @@ public class LagerManager {
 
     private boolean moveItem(Inventory sourceInv, int slot, LagerNode targetNode) {
         if (!isChunkLoaded(targetNode.getLocation())) return false;
-        
+
         Block targetBlock = targetNode.getLocation().getBlock();
         if (!(targetBlock.getState() instanceof Container targetContainer)) return false;
-        
+
         Inventory targetInv = targetContainer.getInventory();
         ItemStack itemToMove = sourceInv.getItem(slot);
         if (itemToMove == null) return false;
 
         HashMap<Integer, ItemStack> leftover = targetInv.addItem(itemToMove);
-        
+
         if (leftover.isEmpty()) {
             sourceInv.setItem(slot, null);
             return true;
@@ -133,7 +126,7 @@ public class LagerManager {
         }
         return false;
     }
-    
+
     private boolean isChunkLoaded(Location loc) {
         World world = loc.getWorld();
         if (world == null) return false;
@@ -141,17 +134,20 @@ public class LagerManager {
     }
 
     private boolean matchesFilter(ItemStack item, LagerNode node) {
-        if (node.getFilterMaterials().isEmpty()) return false; // Sicherheit
+
+        if (node.getFilterMaterials().isEmpty()) return true;
+
         boolean isContained = node.getFilterMaterials().contains(item.getType());
-        return node.isWhitelist() == isContained;
+
+        return node.isWhitelist() ? isContained : !isContained;
     }
-    
+
     public Location getNormalizedLocation(Block block) {
         if (block.getState() instanceof Container container) {
-             Inventory inv = container.getInventory();
-             if (inv.getLocation() != null) {
-                 return inv.getLocation();
-             }
+            Inventory inv = container.getInventory();
+            if (inv.getLocation() != null) {
+                return inv.getLocation();
+            }
         }
         return block.getLocation();
     }
@@ -161,19 +157,17 @@ public class LagerManager {
         if (nodes.containsKey(normLoc)) return;
 
         LagerNode node = new LagerNode(type, normLoc, owner);
+        node.setOwnerId(owner);
         registerNode(node);
         markSave();
     }
 
     private void registerNode(LagerNode node) {
         nodes.put(node.getLocation(), node);
-        // Verwirrende Benennung in der Variable, aber logisch korrekt:
-        // Type.AUSGANG = Items gehen WEG -> ist die QUELLE (inputs Liste)
-        // Type.EINGANG = Items kommen AN -> ist das ZIEL (outputs Liste)
         if (node.getType() == LagerNode.Type.AUSGANG) inputs.add(node);
         else outputs.add(node);
     }
-    
+
     public void switchType(LagerNode node) {
         if (node.getType() == LagerNode.Type.AUSGANG) inputs.remove(node);
         else outputs.remove(node);
@@ -184,7 +178,7 @@ public class LagerManager {
         else outputs.add(node);
         markSave();
     }
-    
+
     public void removeNode(Location loc) {
         Location normLoc = getNormalizedLocation(loc.getBlock());
         LagerNode node = nodes.remove(normLoc);
@@ -203,11 +197,11 @@ public class LagerManager {
         for (Map.Entry<Location, LagerNode> entry : nodes.entrySet()) {
             String key = serializeLoc(entry.getKey());
             LagerNode node = entry.getValue();
-            
+
             dataConfig.set("nodes." + key + ".type", node.getType().name());
             dataConfig.set("nodes." + key + ".owner", node.getOwnerId() != null ? node.getOwnerId().toString() : null);
             dataConfig.set("nodes." + key + ".whitelist", node.isWhitelist());
-            
+
             List<String> mats = new ArrayList<>();
             for (Material m : node.getFilterMaterials()) mats.add(m.name());
             dataConfig.set("nodes." + key + ".filter", mats);
@@ -219,7 +213,7 @@ public class LagerManager {
         inputs.clear();
         outputs.clear();
         nodes.clear();
-        
+
         ConfigurationSection section = dataConfig.getConfigurationSection("nodes");
         if (section == null) return;
 
@@ -227,16 +221,16 @@ public class LagerManager {
             try {
                 Location loc = deserializeLoc(key);
                 if (loc == null) continue;
-                
+
                 String typeStr = section.getString(key + ".type", "AUSGANG");
                 LagerNode.Type type = LagerNode.Type.valueOf(typeStr);
-                
+
                 String ownerStr = section.getString(key + ".owner");
                 UUID owner = ownerStr != null ? UUID.fromString(ownerStr) : null;
 
                 LagerNode node = new LagerNode(type, loc, owner);
                 node.setWhitelist(section.getBoolean(key + ".whitelist", true));
-                
+
                 List<String> mats = section.getStringList(key + ".filter");
                 for (String s : mats) {
                     try { node.getFilterMaterials().add(Material.valueOf(s)); } catch (Exception ignored) {}

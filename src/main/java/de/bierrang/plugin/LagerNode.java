@@ -12,9 +12,9 @@ public class LagerNode {
     private Type type;
     private Location location;
     private UUID ownerId;
-    private Set<Material> filterMaterials; // GEÄNDERT: Set<Material>
+    private Set<Material> filterMaterials;
     private boolean isWhitelist;
-    
+
     private transient long lastFailTime = 0;
 
     public LagerNode(Type type, Location location, UUID ownerId) {
@@ -29,10 +29,11 @@ public class LagerNode {
     public void setType(Type type) { this.type = type; }
     public Location getLocation() { return location; }
     public UUID getOwnerId() { return ownerId; }
+    public void setOwnerId(UUID ownerId) { this.ownerId = ownerId; }
     public Set<Material> getFilterMaterials() { return filterMaterials; }
     public boolean isWhitelist() { return isWhitelist; }
     public void setWhitelist(boolean whitelist) { isWhitelist = whitelist; }
-    
+
     public long getLastFailTime() { return lastFailTime; }
     public void setLastFailTime(long time) { this.lastFailTime = time; }
 }

@@ -49,7 +49,11 @@ public class LagerManager {
         new BukkitRunnable() {
             @Override
             public void run() {
-                tryTransfer();
+                try {
+                    tryTransfer();
+                } catch (Exception ex) {
+                    plugin.getLogger().log(Level.SEVERE, "Fehler beim Lager-Transfer", ex);
+                }
                 if (needsSave) {
                     save();
                     needsSave = false;
@@ -138,11 +142,11 @@ public class LagerManager {
     }
 
     public Location getNormalizedLocation(Block block) {
-        Location loc = block.getLocation();
-        return new Location(loc.getWorld(), loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+        return getNormalizedLocation(block.getLocation());
     }
 
     public Location getNormalizedLocation(Location loc) {
+        if (loc == null || loc.getWorld() == null) return null;
         return new Location(loc.getWorld(), loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
     }
 
@@ -157,9 +161,25 @@ public class LagerManager {
 
     public void createNode(UUID owner, Location loc, LagerNode.Type type) {
         Location normalized = getNormalizedLocation(loc);
-        LagerNode node = new LagerNode(normalized, type);
+        if (normalized == null) return;
 
+        LagerNode node = nodes.get(normalized);
+        if (node != null) {
+            if (node.getType() == LagerNode.Type.EINGANG) inputs.remove(node);
+            else outputs.remove(node);
+
+            node.setType(type);
+
+            if (type == LagerNode.Type.EINGANG) inputs.add(node);
+            else outputs.add(node);
+
+            needsSave = true;
+            return;
+        }
+
+        node = new LagerNode(normalized, type);
         nodes.put(normalized, node);
+
         if (type == LagerNode.Type.EINGANG) inputs.add(node);
         else outputs.add(node);
 
@@ -168,8 +188,9 @@ public class LagerManager {
 
     public void removeNode(Location loc) {
         Location normalized = getNormalizedLocation(loc);
-        LagerNode node = nodes.remove(normalized);
+        if (normalized == null) return;
 
+        LagerNode node = nodes.remove(normalized);
         if (node != null) {
             inputs.remove(node);
             outputs.remove(node);
@@ -178,6 +199,8 @@ public class LagerManager {
     }
 
     public void switchType(LagerNode node) {
+        if (node == null) return;
+
         if (node.getType() == LagerNode.Type.AUSGANG) {
             outputs.remove(node);
             node.setType(LagerNode.Type.EINGANG);
@@ -187,13 +210,17 @@ public class LagerManager {
             node.setType(LagerNode.Type.AUSGANG);
             outputs.add(node);
         }
+
         needsSave = true;
     }
 
     private void tryTransfer() {
         if (inputs.isEmpty() || outputs.isEmpty()) return;
 
-        for (LagerNode outNode : new ArrayList<>(outputs)) {
+        List<LagerNode> outCopy = new ArrayList<>(outputs);
+        List<LagerNode> inCopy = new ArrayList<>(inputs);
+
+        for (LagerNode outNode : outCopy) {
             Container outContainer = getContainerAt(outNode.getLocation());
             if (outContainer == null) continue;
 
@@ -206,28 +233,41 @@ public class LagerManager {
                 if (!passesFilter(outNode, stack.getType())) continue;
 
                 ItemStack toMove = stack.clone();
-                toMove.setAmount(1);
 
-                for (LagerNode inNode : new ArrayList<>(inputs)) {
-                    Container inContainer = getContainerAt(inNode.getLocation());
-                    if (inContainer == null) continue;
-
-                    Inventory inInv = inContainer.getInventory();
-
-                    Map<Integer, ItemStack> leftover = inInv.addItem(toMove);
-                    if (leftover.isEmpty()) {
-                        stack.setAmount(stack.getAmount() - 1);
-                        if (stack.getAmount() <= 0) outInv.setItem(slot, null);
-                        else outInv.setItem(slot, stack);
-                        return;
-                    }
+                boolean moved = moveToAnyInput(inCopy, toMove);
+                if (moved) {
+                    outInv.setItem(slot, null);
+                    needsSave = true;
+                    return;
                 }
             }
         }
     }
 
+    private boolean moveToAnyInput(List<LagerNode> inCopy, ItemStack toMove) {
+        for (LagerNode inNode : inCopy) {
+            Container inContainer = getContainerAt(inNode.getLocation());
+            if (inContainer == null) continue;
+
+            Inventory inInv = inContainer.getInventory();
+
+            Map<Integer, ItemStack> leftover = inInv.addItem(toMove.clone());
+            if (leftover.isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private Container getContainerAt(Location loc) {
         if (loc == null) return null;
+        World world = loc.getWorld();
+        if (world == null) return null;
+
+        if (!world.isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4)) {
+            return null;
+        }
+
         if (!(loc.getBlock().getState() instanceof Container c)) return null;
         return c;
     }

@@ -2,38 +2,49 @@ package de.bierrang.plugin;
 
 import org.bukkit.Location;
 import org.bukkit.Material;
+
 import java.util.HashSet;
 import java.util.Set;
-import java.util.UUID;
 
 public class LagerNode {
-    public enum Type { AUSGANG, EINGANG }
 
-    private Type type;
-    private Location location;
-    private UUID ownerId;
-    private Set<Material> filterMaterials;
-    private boolean isWhitelist;
-
-    private transient long lastFailTime = 0;
-
-    public LagerNode(Type type, Location location, UUID ownerId) {
-        this.type = type;
-        this.location = location;
-        this.ownerId = ownerId;
-        this.filterMaterials = new HashSet<>();
-        this.isWhitelist = true;
+    public enum Type {
+        AUSGANG,
+        EINGANG
     }
 
-    public Type getType() { return type; }
-    public void setType(Type type) { this.type = type; }
-    public Location getLocation() { return location; }
-    public UUID getOwnerId() { return ownerId; }
-    public void setOwnerId(UUID ownerId) { this.ownerId = ownerId; }
-    public Set<Material> getFilterMaterials() { return filterMaterials; }
-    public boolean isWhitelist() { return isWhitelist; }
-    public void setWhitelist(boolean whitelist) { isWhitelist = whitelist; }
+    private final Location location;
+    private Type type;
+    private boolean whitelist;
+    private final Set<Material> filterMaterials = new HashSet<>();
 
-    public long getLastFailTime() { return lastFailTime; }
-    public void setLastFailTime(long time) { this.lastFailTime = time; }
+    public LagerNode(Location location, Type type) {
+        this.location = location;
+        this.type = type;
+        this.whitelist = true;
+    }
+
+    public Location getLocation() {
+        return location;
+    }
+
+    public Type getType() {
+        return type;
+    }
+
+    public void setType(Type type) {
+        this.type = type;
+    }
+
+    public boolean isWhitelist() {
+        return whitelist;
+    }
+
+    public void setWhitelist(boolean whitelist) {
+        this.whitelist = whitelist;
+    }
+
+    public Set<Material> getFilterMaterials() {
+        return filterMaterials;
+    }
 }

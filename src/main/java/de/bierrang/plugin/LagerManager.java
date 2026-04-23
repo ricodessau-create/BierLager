@@ -28,231 +28,212 @@ public class LagerManager {
     private final List<LagerNode> inputs = new ArrayList<>();
     private final List<LagerNode> outputs = new ArrayList<>();
 
-    private final Map<UUID, Location> lastInteracted = new HashMap<>();
+    private final Map<UUID, Location> tempLocations = new HashMap<>();
     private boolean needsSave = false;
 
     public LagerManager(BierLager plugin) {
         this.plugin = plugin;
-        this.dataFile = new File(plugin.getDataFolder(), "data.yml");
+        this.dataFile = new File(plugin.getDataFolder(), "lager.yml");
+
         if (!dataFile.exists()) {
-            try { dataFile.createNewFile(); } catch (IOException e) { e.printStackTrace(); }
+            try {
+                plugin.getDataFolder().mkdirs();
+                dataFile.createNewFile();
+            } catch (IOException e) {
+                plugin.getLogger().log(Level.SEVERE, "Konnte lager.yml nicht erstellen", e);
+            }
         }
+
         this.dataConfig = YamlConfiguration.loadConfiguration(dataFile);
 
-        startTransferTask();
-        startAutoSaveTask();
-    }
-
-    private void startTransferTask() {
         new BukkitRunnable() {
             @Override
             public void run() {
-                transferAllItems();
-            }
-        }.runTaskTimer(plugin, 20L, 10L);
-    }
-
-    private void startAutoSaveTask() {
-        new BukkitRunnable() {
-            @Override
-            public void run() {
+                tryTransfer();
                 if (needsSave) {
-                    performSave();
+                    save();
                     needsSave = false;
                 }
             }
-        }.runTaskTimer(plugin, 6000L, 6000L);
-    }
-
-    private void transferAllItems() {
-        for (LagerNode sourceNode : inputs) {
-            if (System.currentTimeMillis() - sourceNode.getLastFailTime() < 2000) continue;
-            if (!isChunkLoaded(sourceNode.getLocation())) continue;
-
-            Block sourceBlock = sourceNode.getLocation().getBlock();
-            if (!(sourceBlock.getState() instanceof Container sourceContainer)) continue;
-
-            Inventory sourceInv = sourceContainer.getInventory();
-
-            boolean anyItemMoved = false;
-
-            for (int i = 0; i < sourceInv.getSize(); i++) {
-                ItemStack item = sourceInv.getItem(i);
-                if (item == null || item.getType() == Material.AIR) continue;
-
-                boolean movedThisSlot = false;
-
-                for (LagerNode targetNode : outputs) {
-                    if (!Objects.equals(sourceNode.getOwnerId(), targetNode.getOwnerId())) continue;
-                    if (!isChunkLoaded(targetNode.getLocation())) continue;
-
-                    if (!matchesFilter(item, targetNode)) continue;
-
-                    if (moveItem(sourceInv, i, targetNode)) {
-                        movedThisSlot = true;
-                        anyItemMoved = true;
-                        break;
-                    }
-                }
-            }
-
-            if (!anyItemMoved) {
-                sourceNode.setLastFailTime(System.currentTimeMillis());
-            }
-        }
-    }
-
-    private boolean moveItem(Inventory sourceInv, int slot, LagerNode targetNode) {
-        if (!isChunkLoaded(targetNode.getLocation())) return false;
-
-        Block targetBlock = targetNode.getLocation().getBlock();
-        if (!(targetBlock.getState() instanceof Container targetContainer)) return false;
-
-        Inventory targetInv = targetContainer.getInventory();
-        ItemStack itemToMove = sourceInv.getItem(slot);
-        if (itemToMove == null) return false;
-
-        HashMap<Integer, ItemStack> leftover = targetInv.addItem(itemToMove);
-
-        if (leftover.isEmpty()) {
-            sourceInv.setItem(slot, null);
-            return true;
-        } else {
-            ItemStack remaining = leftover.values().iterator().next();
-            if (remaining != null) {
-                sourceInv.setItem(slot, remaining);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean isChunkLoaded(Location loc) {
-        World world = loc.getWorld();
-        if (world == null) return false;
-        return world.isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4);
-    }
-
-    private boolean matchesFilter(ItemStack item, LagerNode node) {
-
-        if (node.getFilterMaterials().isEmpty()) return true;
-
-        boolean isContained = node.getFilterMaterials().contains(item.getType());
-
-        return node.isWhitelist() ? isContained : !isContained;
-    }
-
-    public Location getNormalizedLocation(Block block) {
-        if (block.getState() instanceof Container container) {
-            Inventory inv = container.getInventory();
-            if (inv.getLocation() != null) {
-                return inv.getLocation();
-            }
-        }
-        return block.getLocation();
-    }
-
-    public void createNode(UUID owner, Location loc, LagerNode.Type type) {
-        Location normLoc = getNormalizedLocation(loc.getBlock());
-        if (nodes.containsKey(normLoc)) return;
-
-        LagerNode node = new LagerNode(type, normLoc, owner);
-        node.setOwnerId(owner);
-        registerNode(node);
-        markSave();
-    }
-
-    private void registerNode(LagerNode node) {
-        nodes.put(node.getLocation(), node);
-        if (node.getType() == LagerNode.Type.AUSGANG) inputs.add(node);
-        else outputs.add(node);
-    }
-
-    public void switchType(LagerNode node) {
-        if (node.getType() == LagerNode.Type.AUSGANG) inputs.remove(node);
-        else outputs.remove(node);
-
-        node.setType(node.getType() == LagerNode.Type.AUSGANG ? LagerNode.Type.EINGANG : LagerNode.Type.AUSGANG);
-
-        if (node.getType() == LagerNode.Type.AUSGANG) inputs.add(node);
-        else outputs.add(node);
-        markSave();
-    }
-
-    public void removeNode(Location loc) {
-        Location normLoc = getNormalizedLocation(loc.getBlock());
-        LagerNode node = nodes.remove(normLoc);
-        if (node != null) {
-            inputs.remove(node);
-            outputs.remove(node);
-            markSave();
-        }
-    }
-
-    private void markSave() { needsSave = true; }
-    public void save() { performSave(); }
-
-    private void performSave() {
-        dataConfig.set("nodes", null);
-        for (Map.Entry<Location, LagerNode> entry : nodes.entrySet()) {
-            String key = serializeLoc(entry.getKey());
-            LagerNode node = entry.getValue();
-
-            dataConfig.set("nodes." + key + ".type", node.getType().name());
-            dataConfig.set("nodes." + key + ".owner", node.getOwnerId() != null ? node.getOwnerId().toString() : null);
-            dataConfig.set("nodes." + key + ".whitelist", node.isWhitelist());
-
-            List<String> mats = new ArrayList<>();
-            for (Material m : node.getFilterMaterials()) mats.add(m.name());
-            dataConfig.set("nodes." + key + ".filter", mats);
-        }
-        try { dataConfig.save(dataFile); } catch (IOException e) { e.printStackTrace(); }
+        }.runTaskTimer(plugin, 200L, 200L);
     }
 
     public void load() {
+        nodes.clear();
         inputs.clear();
         outputs.clear();
-        nodes.clear();
 
         ConfigurationSection section = dataConfig.getConfigurationSection("nodes");
         if (section == null) return;
 
         for (String key : section.getKeys(false)) {
+            ConfigurationSection nodeSec = section.getConfigurationSection(key);
+            if (nodeSec == null) continue;
+
+            String worldName = nodeSec.getString("world");
+            int x = nodeSec.getInt("x");
+            int y = nodeSec.getInt("y");
+            int z = nodeSec.getInt("z");
+            String typeStr = nodeSec.getString("type", "AUSGANG");
+            boolean whitelist = nodeSec.getBoolean("whitelist", true);
+            List<String> mats = nodeSec.getStringList("materials");
+
+            World world = Bukkit.getWorld(worldName);
+            if (world == null) continue;
+
+            Location loc = new Location(world, x, y, z);
+
+            LagerNode.Type type;
             try {
-                Location loc = deserializeLoc(key);
-                if (loc == null) continue;
-
-                String typeStr = section.getString(key + ".type", "AUSGANG");
-                LagerNode.Type type = LagerNode.Type.valueOf(typeStr);
-
-                String ownerStr = section.getString(key + ".owner");
-                UUID owner = ownerStr != null ? UUID.fromString(ownerStr) : null;
-
-                LagerNode node = new LagerNode(type, loc, owner);
-                node.setWhitelist(section.getBoolean(key + ".whitelist", true));
-
-                List<String> mats = section.getStringList(key + ".filter");
-                for (String s : mats) {
-                    try { node.getFilterMaterials().add(Material.valueOf(s)); } catch (Exception ignored) {}
-                }
-                registerNode(node);
+                type = LagerNode.Type.valueOf(typeStr);
             } catch (Exception e) {
-                plugin.getLogger().log(Level.WARNING, "Fehler beim Laden Node: " + key, e);
+                type = LagerNode.Type.AUSGANG;
+            }
+
+            LagerNode node = new LagerNode(loc, type);
+            node.setWhitelist(whitelist);
+
+            for (String m : mats) {
+                try {
+                    node.getFilterMaterials().add(Material.valueOf(m));
+                } catch (Exception ignored) {}
+            }
+
+            nodes.put(loc, node);
+            if (type == LagerNode.Type.EINGANG) inputs.add(node);
+            else outputs.add(node);
+        }
+    }
+
+    public void save() {
+        dataConfig.set("nodes", null);
+        ConfigurationSection section = dataConfig.createSection("nodes");
+
+        int index = 0;
+        for (LagerNode node : nodes.values()) {
+            Location loc = node.getLocation();
+            ConfigurationSection nodeSec = section.createSection("node_" + index++);
+
+            nodeSec.set("world", loc.getWorld().getName());
+            nodeSec.set("x", loc.getBlockX());
+            nodeSec.set("y", loc.getBlockY());
+            nodeSec.set("z", loc.getBlockZ());
+            nodeSec.set("type", node.getType().name());
+            nodeSec.set("whitelist", node.isWhitelist());
+
+            List<String> mats = new ArrayList<>();
+            for (Material m : node.getFilterMaterials()) mats.add(m.name());
+            nodeSec.set("materials", mats);
+        }
+
+        try {
+            dataConfig.save(dataFile);
+        } catch (IOException e) {
+            plugin.getLogger().log(Level.SEVERE, "Konnte lager.yml nicht speichern", e);
+        }
+    }
+
+    public Map<Location, LagerNode> getNodes() {
+        return nodes;
+    }
+
+    public Location getNormalizedLocation(Block block) {
+        Location loc = block.getLocation();
+        return new Location(loc.getWorld(), loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+    }
+
+    public Location getNormalizedLocation(Location loc) {
+        return new Location(loc.getWorld(), loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+    }
+
+    public void setTempLocation(UUID uuid, Location loc) {
+        if (loc == null) tempLocations.remove(uuid);
+        else tempLocations.put(uuid, getNormalizedLocation(loc));
+    }
+
+    public Location getTempLocation(UUID uuid) {
+        return tempLocations.get(uuid);
+    }
+
+    public void createNode(UUID owner, Location loc, LagerNode.Type type) {
+        Location normalized = getNormalizedLocation(loc);
+        LagerNode node = new LagerNode(normalized, type);
+
+        nodes.put(normalized, node);
+        if (type == LagerNode.Type.EINGANG) inputs.add(node);
+        else outputs.add(node);
+
+        needsSave = true;
+    }
+
+    public void removeNode(Location loc) {
+        Location normalized = getNormalizedLocation(loc);
+        LagerNode node = nodes.remove(normalized);
+
+        if (node != null) {
+            inputs.remove(node);
+            outputs.remove(node);
+            needsSave = true;
+        }
+    }
+
+    public void switchType(LagerNode node) {
+        if (node.getType() == LagerNode.Type.AUSGANG) {
+            outputs.remove(node);
+            node.setType(LagerNode.Type.EINGANG);
+            inputs.add(node);
+        } else {
+            inputs.remove(node);
+            node.setType(LagerNode.Type.AUSGANG);
+            outputs.add(node);
+        }
+        needsSave = true;
+    }
+
+    private void tryTransfer() {
+        if (inputs.isEmpty() || outputs.isEmpty()) return;
+
+        for (LagerNode outNode : new ArrayList<>(outputs)) {
+            Container outContainer = getContainerAt(outNode.getLocation());
+            if (outContainer == null) continue;
+
+            Inventory outInv = outContainer.getInventory();
+
+            for (int slot = 0; slot < outInv.getSize(); slot++) {
+                ItemStack stack = outInv.getItem(slot);
+                if (stack == null || stack.getType().isAir()) continue;
+
+                if (!passesFilter(outNode, stack.getType())) continue;
+
+                ItemStack toMove = stack.clone();
+                toMove.setAmount(1);
+
+                for (LagerNode inNode : new ArrayList<>(inputs)) {
+                    Container inContainer = getContainerAt(inNode.getLocation());
+                    if (inContainer == null) continue;
+
+                    Inventory inInv = inContainer.getInventory();
+
+                    Map<Integer, ItemStack> leftover = inInv.addItem(toMove);
+                    if (leftover.isEmpty()) {
+                        stack.setAmount(stack.getAmount() - 1);
+                        if (stack.getAmount() <= 0) outInv.setItem(slot, null);
+                        else outInv.setItem(slot, stack);
+                        return;
+                    }
+                }
             }
         }
     }
 
-    public Map<Location, LagerNode> getNodes() { return nodes; }
-    public void setTempLocation(UUID uuid, Location loc) { lastInteracted.put(uuid, loc); }
-    public Location getTempLocation(UUID uuid) { return lastInteracted.get(uuid); }
-
-    private String serializeLoc(Location loc) {
-        return loc.getWorld().getName() + ";" + loc.getBlockX() + ";" + loc.getBlockY() + ";" + loc.getBlockZ();
+    private Container getContainerAt(Location loc) {
+        if (loc == null) return null;
+        if (!(loc.getBlock().getState() instanceof Container c)) return null;
+        return c;
     }
-    private Location deserializeLoc(String s) {
-        String[] p = s.split(";");
-        World w = Bukkit.getWorld(p[0]);
-        if (w == null) return null;
-        return new Location(w, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
+
+    private boolean passesFilter(LagerNode node, Material mat) {
+        boolean contains = node.getFilterMaterials().contains(mat);
+        return node.isWhitelist() == contains;
     }
 }

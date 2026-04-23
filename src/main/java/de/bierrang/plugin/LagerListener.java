@@ -266,3 +266,30 @@ public class LagerListener implements Listener {
                     m.addEnchant(org.bukkit.enchantments.Enchantment.LURE, 1, true);
                     m.addItemFlags(org.bukkit.inventory.ItemFlag.HIDE_ENCHANTS);
                     m.setDisplayName("§a" + mat.name());
+                } else {
+                    m.setDisplayName("§7" + mat.name());
+                }
+            });
+
+            inv.addItem(item);
+        }
+
+        // Zurück-Button
+        ItemStack prev = new ItemStack(Material.ARROW);
+        prev.editMeta(m -> m.setDisplayName("§eZurück"));
+        inv.setItem(45, prev);
+
+        // Whitelist/Blacklist-Umschalter
+        ItemStack modeItem = new ItemStack(Material.PAPER);
+        modeItem.editMeta(m -> m.setDisplayName(mode));
+        inv.setItem(49, modeItem);
+
+        // Weiter-Button
+        ItemStack next = new ItemStack(Material.ARROW);
+        next.editMeta(m -> m.setDisplayName("§eWeiter"));
+        inv.setItem(53, next);
+
+        playerPage.put(p.getUniqueId(), page);
+        p.openInventory(inv);
+    }
+}

@@ -50,17 +50,10 @@
     </build>
 
     <repositories>
-        <!-- PaperMC Repository -->
         <repository>
             <id>papermc</id>
             <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
-        <!-- Hangar Repository (Für PlotSquared 7.x) -->
-        <repository>
-            <id>hangar</id>
-            <url>https://repo.papermc.io/repository/hangar/</url>
-        </repository>
-        <!-- EngineHub Repository (Für squirrelid und WorldEdit Abhängigkeiten) -->
         <repository>
             <id>enginehub</id>
             <url>https://maven.enginehub.org/repo/</url>
@@ -74,11 +67,17 @@
             <version>1.21.1-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
-        <!-- PlotSquared -->
         <dependency>
             <groupId>com.intellectualsites.plotsquared</groupId>
             <artifactId>plotsquared-bukkit</artifactId>
             <version>7.3.9</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- WorldEdit wird von PlotSquared vorausgesetzt und muss beim Kompilieren sichtbar sein -->
+        <dependency>
+            <groupId>com.sk89q.worldedit</groupId>
+            <artifactId>worldedit-bukkit</artifactId>
+            <version>7.3.0</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

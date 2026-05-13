@@ -25,7 +25,7 @@ public class LagerListener implements Listener {
 
     /**
      * Bug 1 Fix: UUIDs, die gerade zwischen Plugin-GUIs wechseln.
-     * onClose überspringt den State-Clear solange die UUID hier eingetragen ist.
+     * onClose überspringt den State-Clear solange eine UUID hier eingetragen ist.
      */
     private final Set<UUID> reopening = new HashSet<>();
 
@@ -48,6 +48,7 @@ public class LagerListener implements Listener {
 
         if (!ItemManager.isLagerTool(item, plugin)) return;
 
+        // Lager-Werkzeug → immer Vanilla-Öffnung verhindern
         e.setCancelled(true);
 
         // PlotSquared: nur Plot-Owner darf das Werkzeug nutzen (außer Admins)
@@ -69,11 +70,11 @@ public class LagerListener implements Listener {
     }
 
     // -------------------------------------------------------------------------
-    // GUI-Öffner – alle setzen reopening damit onClose den State behält
+    // GUI-Öffner – alle setzen reopening, damit onClose den State behält
     // -------------------------------------------------------------------------
 
     private void openSetupGUI(Player p) {
-        reopening.add(p.getUniqueId());
+        reopening.add(p.getUniqueId()); // Bug 1 Fix
 
         var inv = Bukkit.createInventory(null, 27, "Lager Verbindung");
 
@@ -95,7 +96,7 @@ public class LagerListener implements Listener {
     }
 
     private void openSettingsGUI(Player p, LagerNode node) {
-        reopening.add(p.getUniqueId());
+        reopening.add(p.getUniqueId()); // Bug 1 Fix
 
         var inv = Bukkit.createInventory(null, 27, "Lager Einstellungen");
 
@@ -118,7 +119,7 @@ public class LagerListener implements Listener {
     }
 
     private void openFilterGUI(Player p, LagerNode node, int page) {
-        reopening.add(p.getUniqueId());
+        reopening.add(p.getUniqueId()); // Bug 1 Fix
 
         String mode = node.isWhitelist() ? "§aWhitelist" : "§cBlacklist";
         var inv = Bukkit.createInventory(null, 54, "Filter: " + mode);
@@ -197,14 +198,16 @@ public class LagerListener implements Listener {
             if (loc == null) return;
 
             if (e.getSlot() == 11) {
+                // Ausgang – kein Filter-GUI, State danach komplett schließen
                 plugin.getLagerManager().createNode(p.getUniqueId(), loc, LagerNode.Type.AUSGANG);
                 p.sendMessage(ChatColor.GREEN + "Ausgang erstellt!");
-                p.closeInventory(); // State darf geleert werden
+                p.closeInventory(); // onClose darf State leeren → kein reopening
             } else if (e.getSlot() == 15) {
+                // Eingang – direkt weiter zum Filter, State behalten
                 plugin.getLagerManager().createNode(p.getUniqueId(), loc, LagerNode.Type.EINGANG);
                 p.sendMessage(ChatColor.GREEN + "Eingang erstellt! Filter öffnet sich...");
 
-                reopening.add(p.getUniqueId()); // State beim close behalten
+                reopening.add(p.getUniqueId()); // Bug 1 Fix: State beim closeInventory behalten
                 p.closeInventory();
 
                 new BukkitRunnable() {
@@ -232,16 +235,19 @@ public class LagerListener implements Listener {
             if (node == null) return;
 
             if (e.getSlot() == 11) {
+                // → Filter GUI (reopening wird in openFilterGUI gesetzt)
                 openFilterGUI(p, node, 0);
             } else if (e.getSlot() == 13) {
+                // Typ wechseln, Settings neu öffnen (reopening wird in openSettingsGUI gesetzt)
                 plugin.getLagerManager().switchType(node);
                 p.sendMessage(ChatColor.YELLOW + "Typ geändert zu: "
                         + (node.getType() == LagerNode.Type.EINGANG ? "§aEingang" : "§6Ausgang"));
                 openSettingsGUI(p, node);
             } else if (e.getSlot() == 15) {
+                // Löschen – State soll geleert werden, kein reopening
                 plugin.getLagerManager().removeNode(loc);
                 p.sendMessage(ChatColor.RED + "Verbindung entfernt.");
-                p.closeInventory(); // State darf geleert werden
+                p.closeInventory();
             }
             return;
         }
@@ -261,6 +267,7 @@ public class LagerListener implements Listener {
 
             int page = playerPage.getOrDefault(p.getUniqueId(), 0);
 
+            // Zurück
             if (e.getSlot() == 45) {
                 int newPage = Math.max(0, page - 1);
                 new BukkitRunnable() {
@@ -270,6 +277,7 @@ public class LagerListener implements Listener {
                 return;
             }
 
+            // Weiter
             if (e.getSlot() == 53) {
                 int newPage = page + 1;
                 new BukkitRunnable() {
@@ -279,6 +287,7 @@ public class LagerListener implements Listener {
                 return;
             }
 
+            // Whitelist / Blacklist umschalten
             if (e.getSlot() == 49) {
                 node.setWhitelist(!node.isWhitelist());
                 plugin.getLagerManager().save();
@@ -289,6 +298,7 @@ public class LagerListener implements Listener {
                 return;
             }
 
+            // Item ein-/austragen (Slots 0–44)
             if (e.getSlot() < 45) {
                 Material mat = clicked.getType();
                 if (node.getFilterMaterials().contains(mat)) {
@@ -306,13 +316,14 @@ public class LagerListener implements Listener {
     }
 
     /**
-     * Bug 1 Fix: State nur leeren wenn der Spieler das GUI-System wirklich verlässt.
-     * Bei GUI-Übergängen (reopening == true) wird der Clear übersprungen.
+     * Bug 1 Fix: State (tempLocation, playerPage) nur leeren, wenn der Spieler
+     * das GUI-System wirklich verlässt. Bei GUI-Übergängen (reopening == true)
+     * wird der Clear übersprungen.
      */
     @EventHandler
     public void onClose(InventoryCloseEvent e) {
         UUID uuid = e.getPlayer().getUniqueId();
-        if (reopening.remove(uuid)) return;
+        if (reopening.remove(uuid)) return; // GUI-Übergang → State behalten
         playerPage.remove(uuid);
         plugin.getLagerManager().setTempLocation(uuid, null);
     }

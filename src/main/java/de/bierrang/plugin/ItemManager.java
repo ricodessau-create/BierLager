@@ -12,7 +12,6 @@ import org.bukkit.persistence.PersistentDataType;
 
 import java.net.URL;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.UUID;
 
 public class ItemManager {
@@ -32,7 +31,6 @@ public class ItemManager {
         } catch (Exception ignored) {}
 
         meta.setPlayerProfile(profile);
-
         meta.setDisplayName(ChatColor.DARK_PURPLE + "Lager Werkzeug");
         meta.setLore(Arrays.asList(
                 ChatColor.GRAY + "Rechtsklick auf Truhe:",
@@ -40,8 +38,6 @@ public class ItemManager {
                 ChatColor.YELLOW + " -> Filter einstellen"
         ));
 
-        meta.setPlaceableKeys(Collections.emptyList());
-        meta.addItemFlags(ItemFlag.HIDE_PLACED_ON);
         meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
         meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE);
         meta.setUnbreakable(true);

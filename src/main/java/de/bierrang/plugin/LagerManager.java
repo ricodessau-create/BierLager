@@ -224,12 +224,16 @@ public class LagerManager {
 
     // -------------------------------------------------------------------------
     // Transfer-Logik
+    //
+    // Filter sitzt auf dem EINGANG:
+    //   - Leerer Filter  → nimmt NICHTS an (kein Filter = kein Transport)
+    //   - Whitelist      → nur eingetragene Items werden angenommen
+    //   - Blacklist      → alles außer eingetragenen Items wird angenommen
+    //
+    // Für jedes Item im AUSGANG werden alle EINGANG-Nodes geprüft.
+    // Findet sich kein passender EINGANG, bleibt das Item im AUSGANG.
     // -------------------------------------------------------------------------
 
-    /**
-     * Bug 2 Fix: kein frühzeitiges return mehr.
-     * Alle Ausgangs-Nodes und alle ihre Slots werden pro Zyklus vollständig abgearbeitet.
-     */
     private void tryTransfer() {
         if (inputs.isEmpty() || outputs.isEmpty()) return;
 
@@ -245,29 +249,25 @@ public class LagerManager {
             for (int slot = 0; slot < outInv.getSize(); slot++) {
                 ItemStack stack = outInv.getItem(slot);
                 if (stack == null || stack.getType().isAir()) continue;
-                if (!passesFilter(outNode, stack.getType())) continue;
 
-                boolean moved = moveToAnyInput(inCopy, stack.clone());
-                if (moved) {
-                    outInv.setItem(slot, null);
-                    needsSave = true;
+                // Jeden EINGANG prüfen – Filter sitzt hier
+                for (LagerNode inNode : inCopy) {
+                    if (!passesFilter(inNode, stack.getType())) continue;
+
+                    Container inContainer = getContainerAt(inNode.getLocation());
+                    if (inContainer == null) continue;
+
+                    Inventory inInv = inContainer.getInventory();
+                    Map<Integer, ItemStack> leftover = inInv.addItem(stack.clone());
+
+                    if (leftover.isEmpty()) {
+                        outInv.setItem(slot, null);
+                        needsSave = true;
+                        break; // Item wurde verschoben, nächster Slot
+                    }
                 }
             }
         }
-    }
-
-    private boolean moveToAnyInput(List<LagerNode> inCopy, ItemStack toMove) {
-        for (LagerNode inNode : inCopy) {
-            Container inContainer = getContainerAt(inNode.getLocation());
-            if (inContainer == null) continue;
-
-            Inventory inInv = inContainer.getInventory();
-            Map<Integer, ItemStack> leftover = inInv.addItem(toMove.clone());
-            if (leftover.isEmpty()) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private Container getContainerAt(Location loc) {
@@ -281,10 +281,14 @@ public class LagerManager {
     }
 
     /**
-     * Bug 3 Fix: Leere Filterliste = alles erlaubt (egal ob Whitelist oder Blacklist).
+     * Prüft ob ein Item den Filter eines EINGANG-Nodes passiert.
+     *
+     * Kein Filter (leere Liste) = NICHTS wird angenommen → false
+     * Whitelist               = nur gelistete Materials → contains == true
+     * Blacklist               = alles außer gelistete   → contains == false
      */
     private boolean passesFilter(LagerNode node, Material mat) {
-        if (node.getFilterMaterials().isEmpty()) return true;
+        if (node.getFilterMaterials().isEmpty()) return false;
         boolean contains = node.getFilterMaterials().contains(mat);
         return node.isWhitelist() == contains;
     }

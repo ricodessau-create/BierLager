@@ -23,9 +23,19 @@ public class LagerListener implements Listener {
     private final BierLager plugin;
     private final Map<UUID, Integer> playerPage = new HashMap<>();
 
+    /**
+     * Bug 1 Fix: UUIDs, die gerade zwischen Plugin-GUIs wechseln.
+     * onClose überspringt den State-Clear solange die UUID hier eingetragen ist.
+     */
+    private final Set<UUID> reopening = new HashSet<>();
+
     public LagerListener(BierLager plugin) {
         this.plugin = plugin;
     }
+
+    // -------------------------------------------------------------------------
+    // Rechtsklick auf Container
+    // -------------------------------------------------------------------------
 
     @EventHandler
     public void onInteract(PlayerInteractEvent e) {
@@ -36,22 +46,35 @@ public class LagerListener implements Listener {
         Player p = e.getPlayer();
         ItemStack item = e.getItem();
 
-        if (ItemManager.isLagerTool(item, plugin)) {
-            e.setCancelled(true);
+        if (!ItemManager.isLagerTool(item, plugin)) return;
 
-            Location loc = plugin.getLagerManager().getNormalizedLocation(e.getClickedBlock());
-            plugin.getLagerManager().setTempLocation(p.getUniqueId(), loc);
+        e.setCancelled(true);
 
-            LagerNode node = plugin.getLagerManager().getNodes().get(loc);
-            if (node == null) {
-                openSetupGUI(p);
-            } else {
-                openSettingsGUI(p, node);
-            }
+        // PlotSquared: nur Plot-Owner darf das Werkzeug nutzen (außer Admins)
+        if (!p.hasPermission("bierlager.admin")
+                && !PlotUtil.isPlotOwner(p, e.getClickedBlock().getLocation())) {
+            p.sendMessage(ChatColor.RED + "Du kannst das Lager-Werkzeug nur auf deinem eigenen Plot nutzen.");
+            return;
+        }
+
+        Location loc = plugin.getLagerManager().getNormalizedLocation(e.getClickedBlock());
+        plugin.getLagerManager().setTempLocation(p.getUniqueId(), loc);
+
+        LagerNode node = plugin.getLagerManager().getNodes().get(loc);
+        if (node == null) {
+            openSetupGUI(p);
+        } else {
+            openSettingsGUI(p, node);
         }
     }
 
+    // -------------------------------------------------------------------------
+    // GUI-Öffner – alle setzen reopening damit onClose den State behält
+    // -------------------------------------------------------------------------
+
     private void openSetupGUI(Player p) {
+        reopening.add(p.getUniqueId());
+
         var inv = Bukkit.createInventory(null, 27, "Lager Verbindung");
 
         var ausgang = new ItemStack(Material.ORANGE_CANDLE);
@@ -64,7 +87,7 @@ public class LagerListener implements Listener {
         var eingang = new ItemStack(Material.GREEN_CANDLE);
         eingang.editMeta(m -> {
             m.setDisplayName("§aEingang (Ziel)");
-            m.setLore(List.of("§7Items kommen hier an", "§cFilter ist erforderlich"));
+            m.setLore(List.of("§7Items kommen hier an", "§7Filter optional"));
         });
         inv.setItem(15, eingang);
 
@@ -72,14 +95,16 @@ public class LagerListener implements Listener {
     }
 
     private void openSettingsGUI(Player p, LagerNode node) {
+        reopening.add(p.getUniqueId());
+
         var inv = Bukkit.createInventory(null, 27, "Lager Einstellungen");
 
         var filterBtn = new ItemStack(Material.HOPPER);
         filterBtn.editMeta(m -> m.setDisplayName("§bFilter bearbeiten"));
         inv.setItem(11, filterBtn);
 
-        Material typeMat = node.getType() == LagerNode.Type.AUSGANG ? Material.ORANGE_CANDLE : Material.GREEN_CANDLE;
-        String nextType = node.getType() == LagerNode.Type.AUSGANG ? "Eingang" : "Ausgang";
+        Material typeMat  = node.getType() == LagerNode.Type.AUSGANG ? Material.ORANGE_CANDLE : Material.GREEN_CANDLE;
+        String   nextType = node.getType() == LagerNode.Type.AUSGANG ? "Eingang" : "Ausgang";
 
         var switchBtn = new ItemStack(typeMat);
         switchBtn.editMeta(m -> m.setDisplayName("§eWechseln zu: " + nextType));
@@ -92,10 +117,61 @@ public class LagerListener implements Listener {
         p.openInventory(inv);
     }
 
+    private void openFilterGUI(Player p, LagerNode node, int page) {
+        reopening.add(p.getUniqueId());
+
+        String mode = node.isWhitelist() ? "§aWhitelist" : "§cBlacklist";
+        var inv = Bukkit.createInventory(null, 54, "Filter: " + mode);
+
+        List<Material> materials = new ArrayList<>();
+        for (Material m : Material.values()) {
+            if (!m.isAir() && m.isItem()) materials.add(m);
+        }
+        materials.sort(Comparator.comparing(Enum::name));
+
+        int itemsPerPage = 45;
+        int start = page * itemsPerPage;
+        int end   = Math.min(start + itemsPerPage, materials.size());
+
+        for (int i = start; i < end; i++) {
+            Material mat  = materials.get(i);
+            ItemStack item = new ItemStack(mat);
+            item.editMeta(m -> {
+                if (node.getFilterMaterials().contains(mat)) {
+                    m.addEnchant(org.bukkit.enchantments.Enchantment.LURE, 1, true);
+                    m.addItemFlags(org.bukkit.inventory.ItemFlag.HIDE_ENCHANTS);
+                    m.setDisplayName("§a" + mat.name());
+                } else {
+                    m.setDisplayName("§7" + mat.name());
+                }
+            });
+            inv.addItem(item);
+        }
+
+        ItemStack prev = new ItemStack(Material.ARROW);
+        prev.editMeta(m -> m.setDisplayName("§eZurück"));
+        inv.setItem(45, prev);
+
+        ItemStack modeItem = new ItemStack(Material.PAPER);
+        modeItem.editMeta(m -> m.setDisplayName(mode + " §7(Klick zum Wechseln)"));
+        inv.setItem(49, modeItem);
+
+        ItemStack next = new ItemStack(Material.ARROW);
+        next.editMeta(m -> m.setDisplayName("§eWeiter"));
+        inv.setItem(53, next);
+
+        playerPage.put(p.getUniqueId(), page);
+        p.openInventory(inv);
+    }
+
+    // -------------------------------------------------------------------------
+    // Events
+    // -------------------------------------------------------------------------
+
     @EventHandler
     public void onDrag(InventoryDragEvent e) {
         String title = e.getView().getTitle();
-        if (title.contains("Filter:") || title.equals("Lager Verbindung") || title.equals("Lager Einstellungen")) {
+        if (title.startsWith("Filter:") || title.equals("Lager Verbindung") || title.equals("Lager Einstellungen")) {
             e.setCancelled(true);
         }
     }
@@ -104,12 +180,13 @@ public class LagerListener implements Listener {
     public void onClick(InventoryClickEvent e) {
         if (!(e.getWhoClicked() instanceof Player p)) return;
 
-        String title = e.getView().getTitle();
-        int raw = e.getRawSlot();
-        int topSize = e.getView().getTopInventory().getSize();
+        String title   = e.getView().getTitle();
+        int    raw     = e.getRawSlot();
+        int    topSize = e.getView().getTopInventory().getSize();
 
         if (raw >= topSize) return;
 
+        // ── Lager Verbindung ──────────────────────────────────────────────────
         if (title.equals("Lager Verbindung")) {
             e.setCancelled(true);
 
@@ -122,10 +199,12 @@ public class LagerListener implements Listener {
             if (e.getSlot() == 11) {
                 plugin.getLagerManager().createNode(p.getUniqueId(), loc, LagerNode.Type.AUSGANG);
                 p.sendMessage(ChatColor.GREEN + "Ausgang erstellt!");
-                p.closeInventory();
+                p.closeInventory(); // State darf geleert werden
             } else if (e.getSlot() == 15) {
                 plugin.getLagerManager().createNode(p.getUniqueId(), loc, LagerNode.Type.EINGANG);
                 p.sendMessage(ChatColor.GREEN + "Eingang erstellt! Filter öffnet sich...");
+
+                reopening.add(p.getUniqueId()); // State beim close behalten
                 p.closeInventory();
 
                 new BukkitRunnable() {
@@ -139,6 +218,7 @@ public class LagerListener implements Listener {
             return;
         }
 
+        // ── Lager Einstellungen ───────────────────────────────────────────────
         if (title.equals("Lager Einstellungen")) {
             e.setCancelled(true);
 
@@ -155,16 +235,18 @@ public class LagerListener implements Listener {
                 openFilterGUI(p, node, 0);
             } else if (e.getSlot() == 13) {
                 plugin.getLagerManager().switchType(node);
-                p.sendMessage(ChatColor.YELLOW + "Typ geändert!");
+                p.sendMessage(ChatColor.YELLOW + "Typ geändert zu: "
+                        + (node.getType() == LagerNode.Type.EINGANG ? "§aEingang" : "§6Ausgang"));
                 openSettingsGUI(p, node);
             } else if (e.getSlot() == 15) {
                 plugin.getLagerManager().removeNode(loc);
-                p.sendMessage(ChatColor.RED + "Entfernt.");
-                p.closeInventory();
+                p.sendMessage(ChatColor.RED + "Verbindung entfernt.");
+                p.closeInventory(); // State darf geleert werden
             }
             return;
         }
 
+        // ── Filter ────────────────────────────────────────────────────────────
         if (title.startsWith("Filter:")) {
             e.setCancelled(true);
 
@@ -181,24 +263,18 @@ public class LagerListener implements Listener {
 
             if (e.getSlot() == 45) {
                 int newPage = Math.max(0, page - 1);
-                playerPage.put(p.getUniqueId(), newPage);
                 new BukkitRunnable() {
                     @Override
-                    public void run() {
-                        openFilterGUI(p, node, newPage);
-                    }
+                    public void run() { openFilterGUI(p, node, newPage); }
                 }.runTaskLater(plugin, 1L);
                 return;
             }
 
             if (e.getSlot() == 53) {
                 int newPage = page + 1;
-                playerPage.put(p.getUniqueId(), newPage);
                 new BukkitRunnable() {
                     @Override
-                    public void run() {
-                        openFilterGUI(p, node, newPage);
-                    }
+                    public void run() { openFilterGUI(p, node, newPage); }
                 }.runTaskLater(plugin, 1L);
                 return;
             }
@@ -208,88 +284,36 @@ public class LagerListener implements Listener {
                 plugin.getLagerManager().save();
                 new BukkitRunnable() {
                     @Override
-                    public void run() {
-                        openFilterGUI(p, node, page);
-                    }
+                    public void run() { openFilterGUI(p, node, page); }
                 }.runTaskLater(plugin, 1L);
                 return;
             }
 
             if (e.getSlot() < 45) {
                 Material mat = clicked.getType();
-
                 if (node.getFilterMaterials().contains(mat)) {
                     node.getFilterMaterials().remove(mat);
                 } else {
                     node.getFilterMaterials().add(mat);
                 }
-
                 plugin.getLagerManager().save();
-
                 new BukkitRunnable() {
                     @Override
-                    public void run() {
-                        openFilterGUI(p, node, page);
-                    }
+                    public void run() { openFilterGUI(p, node, page); }
                 }.runTaskLater(plugin, 1L);
             }
         }
     }
 
+    /**
+     * Bug 1 Fix: State nur leeren wenn der Spieler das GUI-System wirklich verlässt.
+     * Bei GUI-Übergängen (reopening == true) wird der Clear übersprungen.
+     */
     @EventHandler
     public void onClose(InventoryCloseEvent e) {
         UUID uuid = e.getPlayer().getUniqueId();
+        if (reopening.remove(uuid)) return;
         playerPage.remove(uuid);
         plugin.getLagerManager().setTempLocation(uuid, null);
-    }
-
-    private void openFilterGUI(Player p, LagerNode node, int page) {
-        String mode = node.isWhitelist() ? "§aWhitelist" : "§cBlacklist";
-        var inv = Bukkit.createInventory(null, 54, "Filter: " + mode);
-
-        List<Material> materials = new ArrayList<>();
-        for (Material m : Material.values()) {
-            if (!m.isAir() && m.isItem()) materials.add(m);
-        }
-        materials.sort(Comparator.comparing(Enum::name));
-
-        int itemsPerPage = 45;
-        int start = page * itemsPerPage;
-        int end = Math.min(start + itemsPerPage, materials.size());
-
-        for (int i = start; i < end; i++) {
-            Material mat = materials.get(i);
-            ItemStack item = new ItemStack(mat);
-
-            item.editMeta(m -> {
-                if (node.getFilterMaterials().contains(mat)) {
-                    m.addEnchant(org.bukkit.enchantments.Enchantment.LURE, 1, true);
-                    m.addItemFlags(org.bukkit.inventory.ItemFlag.HIDE_ENCHANTS);
-                    m.setDisplayName("§a" + mat.name());
-                } else {
-                    m.setDisplayName("§7" + mat.name());
-                }
-            });
-
-            inv.addItem(item);
-        }
-
-        // Zurück-Button
-        ItemStack prev = new ItemStack(Material.ARROW);
-        prev.editMeta(m -> m.setDisplayName("§eZurück"));
-        inv.setItem(45, prev);
-
-        // Whitelist/Blacklist-Umschalter
-        ItemStack modeItem = new ItemStack(Material.PAPER);
-        modeItem.editMeta(m -> m.setDisplayName(mode));
-        inv.setItem(49, modeItem);
-
-        // Weiter-Button
-        ItemStack next = new ItemStack(Material.ARROW);
-        next.editMeta(m -> m.setDisplayName("§eWeiter"));
-        inv.setItem(53, next);
-
-        playerPage.put(p.getUniqueId(), page);
-        p.openInventory(inv);
     }
 }

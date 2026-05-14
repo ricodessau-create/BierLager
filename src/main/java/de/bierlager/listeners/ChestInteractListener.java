@@ -9,7 +9,7 @@ import de.bierlager.model.PlotSortSystem;
 import de.bierlager.model.SortTarget;
 import de.bierlager.util.ItemUtil;
 import de.bierlager.util.PlotUtil;
-import net.kyori.adventure.text.plain.PlainTextComponentSerializer;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;

@@ -22,8 +22,8 @@
             <url>https://repo.purpurmc.org/snapshots</url>
         </repository>
         <repository>
-            <id>intellectualsites-releases</id>
-            <url>https://mvn.intellectualsites.com/content/repositories/releases/</url>
+            <id>intellectualsites</id>
+            <url>https://repo.intellectualsites.com/repository/intellectualsites/</url>
         </repository>
     </repositories>
 

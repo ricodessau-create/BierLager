@@ -1,0 +1,4 @@
+sort-interval-ticks: 40
+max-sources-per-plot: 10
+max-targets-per-plot: 20
+give-on-join: true

@@ -1,0 +1,21 @@
+name: BierLager
+version: '${project.version}'
+main: de.bierlager.BierLager
+api-version: '1.21'
+authors: [RicoDessau]
+description: Plot-Sortiersystem fuer PurPur 1.21.1 mit Geyser-Support
+depend: [PlotSquared]
+
+commands:
+  bierlager:
+    description: Zeigt BierLager-Hilfe
+    usage: /bierlager
+    permission: bierlager.use
+
+permissions:
+  bierlager.use:
+    description: Erlaubt die Nutzung des BierLager-Systems
+    default: true
+  bierlager.admin:
+    description: Admin-Zugriff
+    default: op

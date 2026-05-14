@@ -9,6 +9,8 @@ import org.bukkit.block.Chest;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.Map;
+
 public class SortManager {
 
     private final BierLager plugin;
@@ -39,9 +41,7 @@ public class SortManager {
                         sourceInv.setItem(i, null);
                     } else {
                         ItemStack remaining = leftover.get(0);
-                        ItemStack diff = item.clone();
-                        diff.setAmount(item.getAmount() - remaining.getAmount());
-                        if (diff.getAmount() > 0) {
+                        if (remaining.getAmount() < item.getAmount()) {
                             sourceInv.setItem(i, remaining);
                         }
                     }

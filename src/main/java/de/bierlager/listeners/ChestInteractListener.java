@@ -51,7 +51,7 @@ public class ChestInteractListener implements Listener {
         if (!ItemUtil.isBierLagerItem(hand)) return;
 
         Block block = event.getClickedBlock();
-        if (block == null || block.getType() != Material.CHEST) {
+        if (block == null || !isChest(block.getType())) {
             plugin.getMessageManager().send(player, "not-a-chest");
             event.setCancelled(true);
             return;
@@ -81,6 +81,10 @@ public class ChestInteractListener implements Listener {
         }
     }
 
+    private boolean isChest(Material type) {
+        return type == Material.CHEST || type == Material.TRAPPED_CHEST;
+    }
+
     private void handleSourceInteract(Player player, Location loc, String plotKey) {
         StorageManager sm = plugin.getStorageManager();
         PlotSortSystem system = sm.getOrCreate(plotKey);
@@ -107,17 +111,22 @@ public class ChestInteractListener implements Listener {
 
         SortTarget target = system.getTarget(loc);
 
-        if (target == null) {
-            int max = plugin.getConfig().getInt("max-targets-per-plot", 20);
-            if (system.getTargets().size() >= max) {
-                plugin.getMessageManager().send(player, "max-targets");
-                return;
-            }
-            target = new SortTarget(loc);
-            system.addTarget(target);
-            sm.save();
-            plugin.getMessageManager().send(player, "target-added");
+        if (target != null) {
+            // Bereits registriert: GUI öffnen zum Filter bearbeiten
+            sessions.put(player.getUniqueId(), new FilterSession(plotKey, loc, 0));
+            player.openInventory(FilterGUI.open(target, 0));
+            return;
         }
+
+        int max = plugin.getConfig().getInt("max-targets-per-plot", 20);
+        if (system.getTargets().size() >= max) {
+            plugin.getMessageManager().send(player, "max-targets");
+            return;
+        }
+        target = new SortTarget(loc);
+        system.addTarget(target);
+        sm.save();
+        plugin.getMessageManager().send(player, "target-added");
 
         sessions.put(player.getUniqueId(), new FilterSession(plotKey, loc, 0));
         player.openInventory(FilterGUI.open(target, 0));
@@ -153,6 +162,14 @@ public class ChestInteractListener implements Listener {
             target.getFilter().clear();
             plugin.getStorageManager().save();
             player.openInventory(FilterGUI.open(target, page));
+            return;
+        }
+
+        if (slot == 47) {
+            system.removeTarget(session.targetLoc());
+            plugin.getStorageManager().save();
+            plugin.getMessageManager().send(player, "target-removed");
+            player.closeInventory();
             return;
         }
 

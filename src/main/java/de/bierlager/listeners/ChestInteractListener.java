@@ -1,3 +1,4 @@
+// FILE: src/main/java/de/bierlager/listeners/ChestInteractListener.java
 package de.bierlager.listeners;
 
 import com.plotsquared.core.plot.Plot;
@@ -25,18 +26,22 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class ChestInteractListener implements Listener {
 
     private final BierLager plugin;
     private final Map<UUID, FilterSession> sessions;
+    private final Set<UUID> navigating;
 
     public ChestInteractListener(BierLager plugin) {
         this.plugin = plugin;
         this.sessions = new HashMap<>();
+        this.navigating = new HashSet<>();
         PlotUtil.init();
     }
 
@@ -112,7 +117,6 @@ public class ChestInteractListener implements Listener {
         SortTarget target = system.getTarget(loc);
 
         if (target != null) {
-            // Bereits registriert: GUI öffnen zum Filter bearbeiten
             sessions.put(player.getUniqueId(), new FilterSession(plotKey, loc, 0));
             player.openInventory(FilterGUI.open(target, 0));
             return;
@@ -161,7 +165,7 @@ public class ChestInteractListener implements Listener {
         if (slot == 46) {
             target.getFilter().clear();
             plugin.getStorageManager().save();
-            player.openInventory(FilterGUI.open(target, page));
+            openPage(player, session, target, page);
             return;
         }
 
@@ -174,16 +178,12 @@ public class ChestInteractListener implements Listener {
         }
 
         if (slot == 48 && page > 0) {
-            int newPage = page - 1;
-            sessions.put(player.getUniqueId(), new FilterSession(session.plotKey(), session.targetLoc(), newPage));
-            player.openInventory(FilterGUI.open(target, newPage));
+            openPage(player, session, target, page - 1);
             return;
         }
 
         if (slot == 50 && page < FilterGUI.getTotalPages() - 1) {
-            int newPage = page + 1;
-            sessions.put(player.getUniqueId(), new FilterSession(session.plotKey(), session.targetLoc(), newPage));
-            player.openInventory(FilterGUI.open(target, newPage));
+            openPage(player, session, target, page + 1);
             return;
         }
 
@@ -204,16 +204,26 @@ public class ChestInteractListener implements Listener {
             }
 
             plugin.getStorageManager().save();
-            player.openInventory(FilterGUI.open(target, page));
+            openPage(player, session, target, page);
         }
+    }
+
+    private void openPage(Player player, FilterSession session, SortTarget target, int page) {
+        UUID uuid = player.getUniqueId();
+        navigating.add(uuid);
+        sessions.put(uuid, new FilterSession(session.plotKey(), session.targetLoc(), page));
+        player.openInventory(FilterGUI.open(target, page));
+        navigating.remove(uuid);
     }
 
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
         if (!(event.getPlayer() instanceof Player player)) return;
+        UUID uuid = player.getUniqueId();
+        if (navigating.contains(uuid)) return;
         String rawTitle = PlainTextComponentSerializer.plainText().serialize(event.getView().title());
         if (rawTitle.startsWith(FilterGUI.TITLE_BASE)) {
-            sessions.remove(player.getUniqueId());
+            sessions.remove(uuid);
         }
     }
 

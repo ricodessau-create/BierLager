@@ -5,8 +5,8 @@ import de.bierlager.model.PlotSortSystem;
 import de.bierlager.model.SortTarget;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
-import org.bukkit.block.Chest;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.Map;
@@ -28,7 +28,7 @@ public class SortManager {
                 ItemStack[] contents = sourceInv.getContents();
                 for (int i = 0; i < contents.length; i++) {
                     ItemStack item = contents[i];
-                    if (item == null) continue;
+                    if (item == null || item.getType().isAir()) continue;
 
                     SortTarget target = findTarget(system, item);
                     if (target == null) continue;
@@ -36,19 +36,20 @@ public class SortManager {
                     Inventory targetInv = getInventory(target.getLocation());
                     if (targetInv == null) continue;
 
-                    if (isSameInventory(sourceInv, targetInv)) continue;
-                    
+                    if (sourceInv.equals(targetInv)) continue;
+
                     ItemStack toMove = item.clone();
-                    Map<Integer, ItemStack> leftover = targetInv.addItem(item.clone());
-                    
+                    Map<Integer, ItemStack> leftover = targetInv.addItem(toMove);
+
                     if (leftover.isEmpty()) {
-                        
                         sourceInv.setItem(i, null);
                         contents[i] = null;
                     } else {
                         ItemStack remaining = leftover.get(0);
                         if (remaining.getAmount() < item.getAmount()) {
-                            sourceInv.setItem(i, remaining);
+                            item.setAmount(remaining.getAmount());
+                            sourceInv.setItem(i, item);
+                            contents[i] = item;
                         }
                     }
                 }
@@ -56,19 +57,26 @@ public class SortManager {
         }
     }
 
+    /**
+     * Ziele mit passendem Filter haben Vorrang.
+     * Ein Ziel ohne Filter gilt als Catch-all und wird nur als Fallback genutzt.
+     */
     private SortTarget findTarget(PlotSortSystem system, ItemStack item) {
+        SortTarget catchAll = null;
         for (SortTarget target : system.getTargets()) {
-            if (target.hasFilter(item.getType())) return target;
+            if (target.getFilter().isEmpty()) {
+                if (catchAll == null) catchAll = target;
+            } else if (target.hasFilter(item.getType())) {
+                return target;
+            }
         }
-        return null;
+        return catchAll;
     }
 
     private Inventory getInventory(Location loc) {
-        if (loc.getWorld() == null) return null;
+        if (loc == null || loc.getWorld() == null) return null;
         Block block = loc.getWorld().getBlockAt(loc);
-        if (block.getState() instanceof Chest chest) {
-            return chest.getInventory();
-        }
-        return null;
+        if (!(block.getState() instanceof InventoryHolder holder)) return null;
+        return holder.getInventory();
     }
 }

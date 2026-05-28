@@ -40,6 +40,7 @@ public class FilterGUI {
 
         inv.setItem(45, buildControl(Material.BARRIER, "§cSchließen", "§7Klick zum Schließen"));
         inv.setItem(46, buildControl(Material.HOPPER, "§eFilter leeren", "§7Entfernt alle Filter"));
+        inv.setItem(47, buildControl(Material.TNT, "§cZiel entfernen", "§7Entfernt diese Truhe als Ziel"));
         inv.setItem(48, page > 0
                 ? buildControl(Material.ARROW, "§eVorherige Seite", "§7Seite " + page)
                 : buildFiller());
@@ -47,6 +48,9 @@ public class FilterGUI {
         inv.setItem(50, page < totalPages - 1
                 ? buildControl(Material.ARROW, "§eNächste Seite", "§7Seite " + (page + 2))
                 : buildFiller());
+        inv.setItem(51, buildFiller());
+        inv.setItem(52, buildFiller());
+        inv.setItem(53, buildFiller());
 
         return inv;
     }
@@ -91,8 +95,9 @@ public class FilterGUI {
         ItemStack item = new ItemStack(Material.BOOK);
         ItemMeta meta = item.getItemMeta();
         meta.displayName(Component.text("§6Filter-Übersicht").decoration(TextDecoration.ITALIC, false));
+        String catchAllHint = target.getFilter().isEmpty() ? " §7(Catch-all)" : "";
         meta.lore(List.of(
-                Component.text("§7Aktive Filter: §e" + target.getFilter().size()).decoration(TextDecoration.ITALIC, false),
+                Component.text("§7Aktive Filter: §e" + target.getFilter().size() + catchAllHint).decoration(TextDecoration.ITALIC, false),
                 Component.text("§7Seite §e" + (page + 1) + " §7/ §e" + total).decoration(TextDecoration.ITALIC, false)
         ));
         item.setItemMeta(meta);

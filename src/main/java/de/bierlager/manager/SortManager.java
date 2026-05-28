@@ -36,9 +36,15 @@ public class SortManager {
                     Inventory targetInv = getInventory(target.getLocation());
                     if (targetInv == null) continue;
 
+                    if (isSameInventory(sourceInv, targetInv)) continue;
+                    
+                    ItemStack toMove = item.clone();
                     Map<Integer, ItemStack> leftover = targetInv.addItem(item.clone());
+                    
                     if (leftover.isEmpty()) {
+                        
                         sourceInv.setItem(i, null);
+                        contents[i] = null;
                     } else {
                         ItemStack remaining = leftover.get(0);
                         if (remaining.getAmount() < item.getAmount()) {

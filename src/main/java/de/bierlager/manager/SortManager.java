@@ -57,10 +57,6 @@ public class SortManager {
         }
     }
 
-    /**
-     * Ziele mit passendem Filter haben Vorrang.
-     * Ein Ziel ohne Filter gilt als Catch-all und wird nur als Fallback genutzt.
-     */
     private SortTarget findTarget(PlotSortSystem system, ItemStack item) {
         SortTarget catchAll = null;
         for (SortTarget target : system.getTargets()) {
